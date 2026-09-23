@@ -1,0 +1,235 @@
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
+const sharp = require("sharp");
+const AppError = require("./AppError");
+const { query } = require("../config/database");
+const {
+  getUploadRootDir,
+  getUploadTargetDir,
+  getAbsolutePathFromPublicUploadPath,
+} = require("./uploadStorage");
+
+const WEBP_TARGET_QUALITIES = [85, 80, 75, 70];
+const WEBP_INPUT_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+const FILE_REFERENCE_COLUMNS = [
+  { table: "seo_content", column: "og_image" },
+  { table: "seo_content", column: "twitter_image" },
+  { table: "social_links", column: "icon_url" },
+  { table: "certificates", column: "image_url" },
+  { table: "banners", column: "file_url" },
+  { table: "homepage_banners", column: "file_url" },
+  { table: "homepage_stats", column: "icon_url" },
+  { table: "homepage_process_steps", column: "file_url" },
+  { table: "homepage_whychoose_cards", column: "file_url" },
+  { table: "homepage_whychoose_cards", column: "cover_image_url" },
+  { table: "facilities", column: "image_url" },
+  { table: "facilities_what_we_do_cards", column: "icon_url" },
+  { table: "team_members", column: "photo_url" },
+  { table: "team_life_gallery", column: "file_url" },
+  { table: "news_content", column: "image_url" },
+  { table: "news_content", column: "logo_url" },
+  { table: "gallery_images", column: "image_url" },
+  { table: "gallery_videos", column: "video_url" },
+  { table: "gallery_videos", column: "thumbnail_url" },
+  { table: "media_coverage", column: "media_url" },
+  { table: "media_coverage", column: "thumbnail_url" },
+];
+
+function ensureUploadDirectories() {
+  const uploadsDir = getUploadRootDir();
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+}
+
+function getExtensionForMimeType(mimeType) {
+  const extensionMap = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/webp": "webp",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/svg+xml": "svg",
+    "image/avif": "avif",
+    "image/bmp": "bmp",
+    "image/x-icon": "ico",
+    "image/vnd.microsoft.icon": "ico",
+    "image/tiff": "tiff",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "application/pdf": "pdf",
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
+  };
+
+  if (extensionMap[mimeType]) return extensionMap[mimeType];
+  if (mimeType && mimeType.startsWith("image/")) {
+    return mimeType.split("/")[1].replace("+xml", "").replace("x-", "");
+  }
+  return null;
+}
+
+async function compressToWebp(buffer) {
+  try {
+    const metadata = await sharp(buffer).metadata();
+    let width = metadata.width || null;
+    let currentBuffer = await sharp(buffer)
+      .rotate()
+      .resize(width && width > 2400 ? { width: 2400, withoutEnlargement: true } : {})
+      .webp({ quality: 82 })
+      .toBuffer();
+
+    return currentBuffer || buffer;
+  } catch (err) {
+    // If sharp fails for any reason, return original buffer
+    return buffer;
+  }
+}
+
+async function prepareStoredFile({ buffer, mimeType, originalName = "" }) {
+  if (WEBP_INPUT_TYPES.has(mimeType)) {
+    try {
+      const processedBuffer = await compressToWebp(buffer);
+      return {
+        buffer: processedBuffer,
+        extension: "webp",
+        mimeType: "image/webp",
+        originalName,
+      };
+    } catch (e) {
+      // Fallback
+    }
+  }
+
+  const extension = getExtensionForMimeType(mimeType) || "bin";
+
+  return {
+    buffer,
+    extension,
+    mimeType,
+    originalName,
+  };
+}
+
+function buildPublicUploadPath(subFolder, filename) {
+  const normalizedSubFolder = String(subFolder || "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  return normalizedSubFolder ? `/uploads/${normalizedSubFolder}/${filename}` : `/uploads/${filename}`;
+}
+
+async function writeStoredFile({ buffer, extension, subFolder = "general" }) {
+  ensureUploadDirectories();
+  const targetDir = getUploadTargetDir(subFolder);
+  const filename = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
+  const filePath = path.join(targetDir, filename);
+  fs.writeFileSync(filePath, buffer);
+  return buildPublicUploadPath(subFolder, filename);
+}
+
+/**
+ * Handles Base64 file upload, saving it locally without file size restrictions.
+ * @param {string} base64Data The base64 file representation
+ * @param {string} subFolder Subfolder inside uploads (e.g. 'banners', 'seo')
+ * @returns {Promise<string>} The relative path of the saved file
+ */
+async function uploadBase64File(base64Data, subFolder = "general") {
+  if (!base64Data) return null;
+
+  const matches = base64Data.match(/^data:([A-Za-z0-9.+/-]+);base64,(.+)$/);
+  if (!matches || matches.length !== 3) {
+    throw new AppError("Invalid file format. Please upload a valid image or video.", 400);
+  }
+
+  const mimeType = matches[1];
+  const rawBuffer = Buffer.from(matches[2], "base64");
+
+  const storedFile = await prepareStoredFile({
+    buffer: rawBuffer,
+    mimeType,
+  });
+
+  return writeStoredFile({
+    buffer: storedFile.buffer,
+    extension: storedFile.extension,
+    subFolder,
+  });
+}
+
+async function saveUploadedBuffer(file, subFolder = "") {
+  if (!file?.buffer) {
+    throw new AppError("No file uploaded", 400);
+  }
+
+  const storedFile = await prepareStoredFile({
+    buffer: file.buffer,
+    mimeType: file.mimetype,
+    originalName: file.originalname,
+  });
+
+  return writeStoredFile({
+    buffer: storedFile.buffer,
+    extension: storedFile.extension,
+    subFolder,
+  });
+}
+
+function deleteStoredFile(relativePath) {
+  if (!relativePath) return false;
+  try {
+    const abs = getAbsolutePathFromPublicUploadPath(relativePath);
+    if (fs.existsSync(abs)) {
+      fs.unlinkSync(abs);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function isStoredFileReferenced(relativePath) {
+  if (!relativePath || typeof relativePath !== "string") {
+    return false;
+  }
+
+  const normalizedPath = relativePath.trim();
+  if (!normalizedPath.startsWith("/uploads/")) {
+    return false;
+  }
+
+  for (const ref of FILE_REFERENCE_COLUMNS) {
+    try {
+      const rows = await query(
+        `SELECT 1 AS matched FROM ${ref.table} WHERE ${ref.column} = ? LIMIT 1`,
+        [normalizedPath]
+      );
+      if (rows.length) {
+        return true;
+      }
+    } catch (error) {
+      // Ignore missing tables/columns so cleanup can still proceed for other refs.
+    }
+  }
+
+  try {
+    const overviewRows = await query(
+      "SELECT 1 AS matched FROM about_gdb_overview WHERE images LIKE ? LIMIT 1",
+      [`%${normalizedPath}%`]
+    );
+    if (overviewRows.length) {
+      return true;
+    }
+  } catch (error) {
+    // Ignore if table does not exist.
+  }
+
+  return false;
+}
+
+module.exports = {
+  uploadBase64File,
+  saveUploadedBuffer,
+  deleteStoredFile,
+  isStoredFileReferenced,
+};
