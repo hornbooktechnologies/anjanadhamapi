@@ -46,7 +46,15 @@ app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
 // Serve uploaded static files
-app.use("/uploads", express.static(uploadDirectory));
+app.use(
+  "/uploads",
+  express.static(uploadDirectory, {
+    setHeaders: (res, path) => {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Content-Disposition", "inline");
+    },
+  })
+);
 
 // Root and health routes for Render/browser checks
 app.get("/", (req, res) => {

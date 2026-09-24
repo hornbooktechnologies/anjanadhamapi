@@ -19,6 +19,7 @@ const keyMembersRoutes = require("../modules/key-members/key-members.routes");
 const blogsRoutes = require("../modules/blogs/blogs.routes");
 const contactEnquiriesRoutes = require("../modules/contact-enquiries/contact-enquiries.routes");
 const translationsRoutes = require("../modules/translations/translations.routes");
+const documentsRoutes = require("../modules/documents/documents.routes");
 
 const authMiddleware = require("../middlewares/auth.middleware");
 const { query } = require("../config/database");
@@ -77,6 +78,7 @@ router.use("/key-members", keyMembersRoutes);
 router.use("/blogs", blogsRoutes);
 router.use("/contact-enquiries", contactEnquiriesRoutes);
 router.use("/translations", translationsRoutes);
+router.use("/documents", documentsRoutes);
 
 module.exports = router;
 

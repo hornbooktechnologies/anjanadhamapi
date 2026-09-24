@@ -43,7 +43,7 @@ function ensureUploadDirectories() {
   }
 }
 
-function getExtensionForMimeType(mimeType) {
+function getExtensionForMimeType(mimeType, originalName = "") {
   const extensionMap = {
     "image/jpeg": "jpg",
     "image/jpg": "jpg",
@@ -62,13 +62,43 @@ function getExtensionForMimeType(mimeType) {
     "video/mp4": "mp4",
     "video/webm": "webm",
     "video/quicktime": "mov",
+    "video/x-msvideo": "avi",
+    "video/x-matroska": "mkv",
+    "audio/mpeg": "mp3",
+    "audio/wav": "wav",
+    "audio/ogg": "ogg",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-powerpoint": "ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "text/plain": "txt",
+    "text/csv": "csv",
+    "text/html": "html",
+    "application/json": "json",
+    "application/zip": "zip",
+    "application/x-zip-compressed": "zip",
+    "application/x-rar-compressed": "rar",
   };
 
-  if (extensionMap[mimeType]) return extensionMap[mimeType];
+  if (mimeType && extensionMap[mimeType]) return extensionMap[mimeType];
+
+  if (originalName && originalName.includes(".")) {
+    const ext = originalName.split(".").pop().trim().toLowerCase();
+    if (ext && ext.length <= 10 && /^[a-z0-9]+$/.test(ext)) {
+      return ext;
+    }
+  }
+
   if (mimeType && mimeType.startsWith("image/")) {
     return mimeType.split("/")[1].replace("+xml", "").replace("x-", "");
   }
-  return null;
+  if (mimeType && mimeType.startsWith("video/")) {
+    return mimeType.split("/")[1].replace("x-", "");
+  }
+
+  return "bin";
 }
 
 async function compressToWebp(buffer) {
@@ -103,7 +133,7 @@ async function prepareStoredFile({ buffer, mimeType, originalName = "" }) {
     }
   }
 
-  const extension = getExtensionForMimeType(mimeType) || "bin";
+  const extension = getExtensionForMimeType(mimeType, originalName);
 
   return {
     buffer,
