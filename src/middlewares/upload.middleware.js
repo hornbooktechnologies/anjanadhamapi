@@ -9,15 +9,31 @@ fs.mkdirSync(uploadDirectory, {
   recursive: true,
 });
 
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+  "application/zip",
+  "application/x-zip-compressed",
+  "application/x-rar-compressed",
+  "application/octet-stream",
+]);
+
 const fileFilter = (_req, file, cb) => {
   if (
     file.mimetype.startsWith("image/") ||
     file.mimetype.startsWith("video/") ||
-    file.mimetype === "application/pdf"
+    ALLOWED_MIME_TYPES.has(file.mimetype)
   ) {
     cb(null, true);
   } else {
-    cb(new AppError("Unsupported file type. Please upload a valid image, video, or PDF.", 400), false);
+    cb(new AppError("Unsupported file type. Please upload a valid image, video, PDF, document, or archive.", 400), false);
   }
 };
 
