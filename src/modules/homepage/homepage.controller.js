@@ -3,7 +3,7 @@ const { successResponse } = require("../../utils/response");
 
 // Stats
 const getStats = async (req, res) => {
-  const data = await homepageService.getAllStats();
+  const data = await homepageService.getAllStats(req.query);
   return successResponse(res, "Stats fetched successfully", data);
 };
 const getStatById = async (req, res) => {

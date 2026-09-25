@@ -77,9 +77,20 @@ async function ensureHomepageStatsSchema() {
 // ==========================================
 // 1. Stats / Value Strip
 // ==========================================
-async function getAllStats() {
+async function getAllStats(filters = {}) {
   await ensureHomepageStatsSchema();
-  return await query("SELECT * FROM homepage_stats ORDER BY sequence ASC, id DESC");
+  const params = [];
+  let whereClause = "";
+
+  if (["active", "inactive"].includes(filters.status)) {
+    whereClause = " WHERE status = ?";
+    params.push(filters.status);
+  }
+
+  return await query(
+    `SELECT * FROM homepage_stats${whereClause} ORDER BY sequence ASC, id DESC`,
+    params
+  );
 }
 
 async function getStatById(id) {
