@@ -2,6 +2,7 @@ const { query } = require("../../config/database");
 const AppError = require("../../utils/AppError");
 const { uploadBase64File, deleteStoredFile } = require("../../utils/fileUpload");
 const { getNextSequence } = require("../../utils/sequence");
+const { overlayEntityTranslations } = require("../translations/translations.service");
 
 let ensureWhyChooseCardsSchemaPromise = null;
 
@@ -87,10 +88,11 @@ async function getAllStats(filters = {}) {
     params.push(filters.status);
   }
 
-  return await query(
+  const rows = await query(
     `SELECT * FROM homepage_stats${whereClause} ORDER BY sequence ASC, id DESC`,
     params
   );
+  return overlayEntityTranslations("homepage_stats", rows, filters.lang, ["title", "description", "value_text"]);
 }
 
 async function getStatById(id) {

@@ -1,7 +1,7 @@
 const { query } = require("../../config/database");
 const AppError = require("../../utils/AppError");
 const { uploadBase64File, deleteStoredFile } = require("../../utils/fileUpload");
-const { getNextSequence, resequenceTable } = require("../../utils/sequence");
+const { getNextSequence } = require("../../utils/sequence");
 const {
   saveEntityTranslations,
   deleteEntityTranslations,
@@ -189,7 +189,6 @@ async function deleteKeyMember(id) {
 
   await query("DELETE FROM key_members WHERE id = ?", [id]);
   await deleteEntityTranslations("key_members", id);
-  await resequenceTable("key_members");
   return { id: Number(id), deleted: true };
 }
 

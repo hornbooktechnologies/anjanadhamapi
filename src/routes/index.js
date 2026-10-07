@@ -16,6 +16,7 @@ const galleryVideoRoutes = require("../modules/gallery-video/gallery-video.route
 const mediaCoverageRoutes = require("../modules/media-coverage/media-coverage.routes");
 const facilitiesRoutes = require("../modules/facilities/facilities.routes");
 const keyMembersRoutes = require("../modules/key-members/key-members.routes");
+const donorsRoutes = require("../modules/donors/donors.routes");
 const blogsRoutes = require("../modules/blogs/blogs.routes");
 const contactEnquiriesRoutes = require("../modules/contact-enquiries/contact-enquiries.routes");
 const translationsRoutes = require("../modules/translations/translations.routes");
@@ -75,6 +76,7 @@ router.use("/gallery/videos", galleryVideoRoutes);
 router.use("/media-coverage", mediaCoverageRoutes);
 router.use("/facilities", facilitiesRoutes);
 router.use("/key-members", keyMembersRoutes);
+router.use("/donors", donorsRoutes);
 router.use("/blogs", blogsRoutes);
 router.use("/contact-enquiries", contactEnquiriesRoutes);
 router.use("/translations", translationsRoutes);

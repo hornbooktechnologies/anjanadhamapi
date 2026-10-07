@@ -26,6 +26,8 @@ const FILE_REFERENCE_COLUMNS = [
   { table: "facilities", column: "image_url" },
   { table: "facilities_what_we_do_cards", column: "icon_url" },
   { table: "team_members", column: "photo_url" },
+  { table: "key_members", column: "photo_url" },
+  { table: "donors", column: "photo_url" },
   { table: "team_life_gallery", column: "file_url" },
   { table: "news_content", column: "image_url" },
   { table: "news_content", column: "logo_url" },

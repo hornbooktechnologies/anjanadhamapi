@@ -10,6 +10,7 @@ const SEQUENCED_TABLES = new Set([
   "facilities",
   "facilities_what_we_do_cards",
   "team_members",
+  "key_members",
   "team_life_gallery",
   "news_categories",
   "news_content",
