@@ -3,6 +3,7 @@ const AppError = require("../../utils/AppError");
 const { uploadBase64File, deleteStoredFile } = require("../../utils/fileUpload");
 const { getNextSequence } = require("../../utils/sequence");
 const { overlayEntityTranslations } = require("../translations/translations.service");
+const { changeProfileWithCleanup } = require("../../utils/profileCleanup");
 
 let ensureWhyChooseCardsSchemaPromise = null;
 
@@ -502,16 +503,14 @@ async function updateHomepageBanner(id, data) {
   let savedFile = file_url;
   if (file_url && file_url.startsWith("data:")) {
     savedFile = await uploadBase64File(file_url, "homepage/banners");
-    if (prev.file_url && prev.file_url.startsWith("/uploads/")) {
-      try { deleteStoredFile(prev.file_url); } catch (e) { }
-    }
   }
 
-  await query(
+  await changeProfileWithCleanup(
     `UPDATE homepage_banners
      SET title = ?, file_url = ?, alt_text = ?, cta_text = ?, cta_link = ?, sequence = ?, status = ?
      WHERE id = ?`,
-    [title ? title.trim() : null, savedFile, alt_text ? alt_text.trim() : null, cta_text ? cta_text.trim() : null, cta_link ? cta_link.trim() : null, sequence, status, id]
+    [title ? title.trim() : null, savedFile, alt_text ? alt_text.trim() : null, cta_text ? cta_text.trim() : null, cta_link ? cta_link.trim() : null, sequence, status, id],
+    savedFile !== prev.file_url ? prev.file_url : null
   );
 
   return {
@@ -529,10 +528,7 @@ async function updateHomepageBanner(id, data) {
 async function deleteHomepageBanner(id) {
   await ensureHomepageBannersTable();
   const banner = await getHomepageBannerById(id);
-  if (banner.file_url && banner.file_url.startsWith("/uploads/")) {
-    try { deleteStoredFile(banner.file_url); } catch (e) { }
-  }
-  await query("DELETE FROM homepage_banners WHERE id = ?", [id]);
+  await changeProfileWithCleanup("DELETE FROM homepage_banners WHERE id = ?", [id], banner.file_url);
 }
 
 async function toggleHomepageBannerStatus(id) {

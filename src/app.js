@@ -5,6 +5,7 @@ const apiRouter = require("./routes");
 const errorMiddleware = require("./middlewares/error.middleware");
 const AppError = require("./utils/AppError");
 const { getProfileBlobUrl } = require('./utils/profileStorage');
+const { getBannerBlobUrl } = require('./utils/bannerStorage');
 
 const path = require("path");
 
@@ -53,6 +54,14 @@ app.get(['/uploads/portraits/*', '/uploads/key_members/*'], (req, res, next) => 
     const blobUrl = getProfileBlobUrl(req.path);
     if (!blobUrl) return next();
     res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(307, blobUrl);
+  } catch (error) { next(error); }
+});
+app.get('/uploads/*', (req, res, next) => {
+  try {
+    const blobUrl = getBannerBlobUrl(req.path);
+    if (!blobUrl) return next();
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.redirect(307, blobUrl);
   } catch (error) { next(error); }
 });

@@ -11,6 +11,7 @@ const {
   getUploadFileCopies,
 } = require("./uploadStorage");
 const { writeProfileFile, deleteProfileBlob } = require('./profileStorage');
+const { isBannerUpload, writeBannerFile, deleteBannerBlob } = require('./bannerStorage');
 
 const WEBP_TARGET_QUALITIES = [85, 80, 75, 70];
 const WEBP_INPUT_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
@@ -169,6 +170,11 @@ async function writeStoredFile({ buffer, extension, subFolder = "general" }) {
     await writeProfileFile(url, buffer, extension === 'webp' ? 'image/webp' : undefined);
     return url;
   }
+  const uploadPath = buildPublicUploadPath(subFolder, `${crypto.randomBytes(16).toString('hex')}.${extension}`);
+  if (isBannerUpload(uploadPath)) {
+    await require('./profileCleanup').scheduleProfileCleanup(uploadPath, 24 * 60 * 60 * 1000);
+    return writeBannerFile(uploadPath, buffer);
+  }
   ensureUploadDirectories();
   const targetDir = getUploadTargetDir(subFolder);
   const filename = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
@@ -279,7 +285,7 @@ async function isStoredFileReferenced(relativePath) {
 async function cleanupStoredFile(url) {
   if (!normalizeUploadPath(url)) return { deleted: false, skipped: true };
   if (await isStoredFileReferenced(url)) return { deleted: false, skipped: true };
-  const cloudDeleted = await deleteProfileBlob(url);
+  const cloudDeleted = isBannerUpload(url) ? await deleteBannerBlob(url) : await deleteProfileBlob(url);
   const localDeleted = deleteStoredFile(url);
   return { deleted: cloudDeleted || localDeleted, skipped: false };
 }
