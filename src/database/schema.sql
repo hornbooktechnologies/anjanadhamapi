@@ -374,11 +374,22 @@ CREATE TABLE IF NOT EXISTS facilities_what_we_do_cards (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 32. Team Members
+CREATE TABLE IF NOT EXISTS team_groups (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL UNIQUE,
+  description TEXT NULL,
+  sequence INT NOT NULL DEFAULT 0,
+  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS team_members (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  group_name ENUM('Board of Directors', 'Leadership') NOT NULL,
+  group_name VARCHAR(255) NOT NULL,
   name VARCHAR(255) NOT NULL,
   designation VARCHAR(255) NOT NULL,
+  location VARCHAR(255) NULL,
   photo_url TEXT NOT NULL,
   photo_alt VARCHAR(255) NOT NULL,
   linkedin_url VARCHAR(255) NULL,
@@ -497,6 +508,7 @@ CREATE TABLE IF NOT EXISTS news_content (
   category_id INT NOT NULL,
   title VARCHAR(255) NOT NULL,
   date DATE NOT NULL,
+  publish_at DATETIME NULL COMMENT 'Scheduled publication in UTC; date remains the IST calendar date',
   short_description TEXT NOT NULL,
   image_url TEXT NOT NULL,
   image_alt VARCHAR(255) NOT NULL,

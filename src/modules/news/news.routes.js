@@ -6,29 +6,50 @@ const validate = require("../../middlewares/validate.middleware");
 const authMiddleware = require("../../middlewares/auth.middleware");
 const checkPermission = require("../../middlewares/permission.middleware");
 const asyncHandler = require("../../utils/asyncHandler");
+const service = require("./news.service");
+const { resolvePublicationSchedule } = require("./news.schedule");
 
 // ==========================================
-// Public Routes (No Auth Required)
+// Published announcements are the only anonymous news feed.
 // ==========================================
+router.get("/public", asyncHandler(ctrl.getPublicAnnouncements));
+
+router.use(authMiddleware);
+
 router.get(
   "/categories",
+  checkPermission("news.category.view"),
   asyncHandler(ctrl.getCategories)
 );
 router.get(
   "/categories/:id",
+  checkPermission("news.category.view"),
   asyncHandler(ctrl.getCategoryById)
 );
 router.get(
   "/",
+  checkPermission("news.content.view"),
   asyncHandler(ctrl.getNewsContent)
 );
 router.get(
   "/:id",
+  checkPermission("news.content.view"),
   asyncHandler(ctrl.getNewsById)
 );
 
-// Protect other news routes with authentication
-router.use(authMiddleware);
+const requirePublishPermission = asyncHandler(async (req, res, next) => {
+  const existing = req.method === "PUT" ? await service.getNewsById(req.params.id) : null;
+  const changesPublication = existing
+    ? req.body.publish_status !== existing.publish_status
+    : req.body.publish_status === "published";
+  const nextSchedule = existing && resolvePublicationSchedule(req.body, existing);
+  const changesSchedule = existing?.publish_status === "published" &&
+    nextSchedule.publish_at !== existing.publish_at?.slice(0, 19).replace("T", " ");
+  if (changesPublication || changesSchedule) {
+    return checkPermission("news.content.publish")(req, res, next);
+  }
+  next();
+});
 
 // ==========================================
 // 1. CATEGORY TABS ROUTES
@@ -63,12 +84,14 @@ router.post(
   "/",
   checkPermission("news.content.create"),
   validate(v.saveNewsContent),
+  requirePublishPermission,
   asyncHandler(ctrl.createNews)
 );
 router.put(
   "/:id",
   checkPermission("news.content.update"),
   validate(v.saveNewsContent),
+  requirePublishPermission,
   asyncHandler(ctrl.updateNews)
 );
 router.delete(

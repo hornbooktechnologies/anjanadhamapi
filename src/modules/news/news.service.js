@@ -2,6 +2,7 @@ const { query } = require("../../config/database");
 const AppError = require("../../utils/AppError");
 const { deleteStoredFile } = require("../../utils/fileUpload");
 const { getNextSequence } = require("../../utils/sequence");
+const { ensureAnnouncementSchedule, resolvePublicationSchedule, utcNowSql, scheduleSql, scheduleFields } = require("./news.schedule");
 
 // ==========================================
 // 1. CATEGORY TABS SERVICE
@@ -37,7 +38,7 @@ async function getCategories(filters = {}) {
   }
 
   // Sorting
-  const sortBy = filters.sortBy || "sequence";
+  const sortBy = ["sequence", "id", "category_title", "status"].includes(filters.sortBy) ? filters.sortBy : "sequence";
   const sortOrder = filters.sortOrder === "desc" ? "DESC" : "ASC";
   sql += ` ORDER BY ${sortBy} ${sortOrder}`;
 
@@ -190,17 +191,20 @@ async function validateFeaturedListingChoice(data, excludedId = null) {
 }
 
 async function createNews(data) {
+  await ensureAnnouncementSchedule();
   await ensureArticleCategoryIsActive(data.category_id);
   await validateFeaturedListingChoice(data);
+  const schedule = resolvePublicationSchedule(data);
   const sequence = await getNextSequence("news_content");
   const result = await query(
     `INSERT INTO news_content 
-     (category_id, title, date, short_description, image_url, image_alt, logo_url, logo_alt, external_url, featured_homepage, featured_listing, publish_status, sequence)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (category_id, title, date, publish_at, short_description, image_url, image_alt, logo_url, logo_alt, external_url, featured_homepage, featured_listing, publish_status, sequence)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.category_id,
       data.title,
-      data.date,
+      schedule.date,
+      schedule.publish_at,
       data.short_description,
       data.image_url,
       data.image_alt,
@@ -213,12 +217,14 @@ async function createNews(data) {
       sequence,
     ]
   );
-  return { id: result.insertId, ...data, sequence };
+  return getNewsById(result.insertId);
 }
 
 async function getNewsContent(filters = {}) {
+  await ensureAnnouncementSchedule();
+  const now = utcNowSql();
   let sql = `
-    SELECT n.*, DATE_FORMAT(n.date, '%Y-%m-%d') AS date, c.category_title
+    SELECT n.*, DATE_FORMAT(n.date, '%Y-%m-%d') AS date, ${scheduleFields}, CASE WHEN n.publish_status = 'draft' THEN 'draft' WHEN ${scheduleSql} > ? THEN 'scheduled' ELSE 'published' END AS publication_state, c.category_title
     FROM news_content n
     INNER JOIN news_categories c ON n.category_id = c.id 
     WHERE 1=1
@@ -235,7 +241,12 @@ async function getNewsContent(filters = {}) {
     params.push(filters.category_id);
   }
 
-  if (filters.publish_status) {
+  const scheduleFilter = ["published", "scheduled"].includes(filters.publish_status)
+    ? ` AND n.publish_status = 'published' AND ${scheduleSql} ${filters.publish_status === "scheduled" ? ">" : "<="} ?` : "";
+  if (scheduleFilter) {
+    sql += scheduleFilter;
+    params.push(now);
+  } else if (filters.publish_status) {
     sql += " AND n.publish_status = ?";
     params.push(filters.publish_status);
   }
@@ -256,7 +267,8 @@ async function getNewsContent(filters = {}) {
   }
 
   // Sorting
-  const sortBy = filters.sortBy || "n.sequence";
+  const sortColumns = { sequence: "n.sequence", title: "n.title", date: scheduleSql, publish_at: scheduleSql, id: "n.id" };
+  const sortBy = sortColumns[filters.sortBy] || "n.sequence";
   const sortOrder = filters.sortOrder === "desc" ? "DESC" : "ASC";
   sql += ` ORDER BY ${sortBy} ${sortOrder}`;
 
@@ -272,7 +284,7 @@ async function getNewsContent(filters = {}) {
     WHERE 1=1
     ${filters.title ? " AND n.title LIKE ?" : ""}
     ${filters.category_id ? " AND n.category_id = ?" : ""}
-    ${filters.publish_status ? " AND n.publish_status = ?" : ""}
+    ${scheduleFilter || (filters.publish_status ? " AND n.publish_status = ?" : "")}
     ${filters.category_status ? " AND c.status = ?" : ""}
     ${filters.startDate ? " AND n.date >= ?" : ""}
     ${filters.endDate ? " AND n.date <= ?" : ""}
@@ -284,7 +296,7 @@ async function getNewsContent(filters = {}) {
   sql += " LIMIT ? OFFSET ?";
   params.push(limit, offset);
 
-  const data = await query(sql, params);
+  const data = await query(sql, [now, ...params]);
   const last_page = Math.ceil(total / limit) || 1;
 
   return {
@@ -298,10 +310,26 @@ async function getNewsContent(filters = {}) {
   };
 }
 
+async function getPublicAnnouncements(filters = {}) {
+  await ensureAnnouncementSchedule();
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 20));
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const now = utcNowSql();
+  const where = `FROM news_content n INNER JOIN news_categories c ON n.category_id = c.id WHERE n.publish_status = 'published' AND c.status = 'active' AND ${scheduleSql} <= ?`;
+  const totals = await query(`SELECT COUNT(*) AS total ${where}`, [now]);
+  const total = Number(totals[0]?.total || 0);
+  const data = await query(
+    `SELECT n.id, n.title, DATE_FORMAT(n.date, '%Y-%m-%d') AS date, ${scheduleFields}, n.short_description, n.image_url, n.image_alt, n.external_url, c.category_title ${where} ORDER BY ${scheduleSql} DESC, n.id DESC LIMIT ? OFFSET ?`,
+    [now, limit, (page - 1) * limit]
+  );
+  return { data, pagination: { total, per_page: limit, current_page: page, last_page: Math.max(1, Math.ceil(total / limit)) } };
+}
+
 async function getNewsById(id) {
+  await ensureAnnouncementSchedule();
   const result = await query(
-    "SELECT *, DATE_FORMAT(date, '%Y-%m-%d') AS date FROM news_content WHERE id = ?",
-    [id]
+    `SELECT n.*, DATE_FORMAT(n.date, '%Y-%m-%d') AS date, ${scheduleFields}, CASE WHEN n.publish_status = 'draft' THEN 'draft' WHEN ${scheduleSql} > ? THEN 'scheduled' ELSE 'published' END AS publication_state FROM news_content n WHERE n.id = ?`,
+    [utcNowSql(), id]
   );
   if (result.length === 0) return null;
   return result[0];
@@ -315,17 +343,19 @@ async function updateNews(id, data) {
 
   await ensureArticleCategoryIsActive(data.category_id, news.category_id);
   await validateFeaturedListingChoice(data, id);
+  const schedule = resolvePublicationSchedule(data, news);
 
   await query(
     `UPDATE news_content SET 
-     category_id = ?, title = ?, date = ?, short_description = ?, 
+     category_id = ?, title = ?, date = ?, publish_at = ?, short_description = ?,
      image_url = ?, image_alt = ?, logo_url = ?, logo_alt = ?, external_url = ?, featured_homepage = ?, featured_listing = ?,
      publish_status = ?, sequence = ? 
      WHERE id = ?`,
     [
       data.category_id,
       data.title,
-      data.date,
+      schedule.date,
+      schedule.publish_at,
       data.short_description,
       data.image_url,
       data.image_alt,
@@ -339,7 +369,7 @@ async function updateNews(id, data) {
       id,
     ]
   );
-  return { id, ...data };
+  return getNewsById(id);
 }
 
 async function deleteNews(id) {
@@ -367,9 +397,13 @@ async function toggleNewsPublish(id) {
   }
 
   const newStatus = news.publish_status === "published" ? "draft" : "published";
+  if (newStatus === "published") await ensureArticleCategoryIsActive(news.category_id);
+  const schedule = newStatus === "published"
+    ? resolvePublicationSchedule({ publish_status: "published", publish_immediately: true }, news)
+    : { date: news.date, publish_at: news.publish_at.slice(0, 19).replace("T", " ") };
   await query(
-    "UPDATE news_content SET publish_status = ?, featured_listing = CASE WHEN ? = 'draft' THEN NULL ELSE featured_listing END WHERE id = ?",
-    [newStatus, newStatus, id]
+    "UPDATE news_content SET publish_status = ?, date = ?, publish_at = ?, featured_listing = CASE WHEN ? = 'draft' THEN NULL ELSE featured_listing END WHERE id = ?",
+    [newStatus, schedule.date, schedule.publish_at, newStatus, id]
   );
   return { id, publish_status: newStatus, featured_listing: newStatus === "draft" ? 0 : Number(news.featured_listing) };
 }
@@ -383,6 +417,7 @@ module.exports = {
   toggleCategoryStatus,
   createNews,
   getNewsContent,
+  getPublicAnnouncements,
   getNewsById,
   updateNews,
   deleteNews,

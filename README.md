@@ -140,6 +140,24 @@ npm run dev
 
 ## Flows
 
+### Extra local OTP console logging
+
+For local development, set these values in the API's ignored `.env` file:
+
+```env
+NODE_ENV=development
+LOGIN_OTP_LOG_TO_CONSOLE=true
+```
+
+Run `npm run dev`, enter your existing email and password in the admin login,
+then read the six-digit OTP from the API server terminal and enter it in the
+OTP form. The same OTP is also sent through the normal email delivery. The OTP still
+expires in ten minutes and must pass the existing verification checks.
+Its value is never included in the login API response.
+
+Set `LOGIN_OTP_LOG_TO_CONSOLE=false` to disable the extra logging. Email delivery
+always runs. Production and Vercel deployments do not add these console logs.
+
 ### 1. Authentication Flow
 1. User logs in with email and password.
 2. Server validates credentials against user table.

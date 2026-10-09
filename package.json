@@ -5,12 +5,14 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "dev": "nodemon --watch src --watch .env --watch .env.local --ext js,json,env,local src/server.js",
     "db:migrate": "node src/database/migrate.js",
+    "announcements:enable": "node scripts/enableAnnouncements.js",
     "content:import-frontend": "node scripts/importFrontendContent.js",
     "uploads:migrate-legacy": "node scripts/migrateLegacyUploads.js"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

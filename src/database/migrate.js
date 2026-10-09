@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
 const { query, transaction } = require("../config/database");
+const { ensureAnnouncementSchedule } = require("../modules/news/news.schedule");
 
 async function hasColumn(tableName, columnName) {
   const rows = await query(
@@ -386,6 +387,7 @@ async function migrate() {
       }
     }
 
+    await ensureAnnouncementSchedule();
     if (await hasColumn("news_categories", "category_type")) {
       await query("ALTER TABLE news_categories DROP COLUMN category_type");
     }
@@ -463,6 +465,8 @@ async function migrate() {
 
       // Define default permissions
       const defaultPermissions = [
+        ...["view", "create", "update", "delete"].map(action => ({ name: `news.category.${action}`, module: "news" })),
+        ...["view", "create", "update", "delete", "publish"].map(action => ({ name: `news.content.${action}`, module: "news" })),
         { name: "dashboard.view", module: "dashboard" },
         { name: "user.create", module: "users" },
         { name: "user.read", module: "users" },
@@ -539,8 +543,8 @@ async function migrate() {
       );
 
       await connection.execute(
-        "DELETE FROM permissions WHERE module IN (?, ?, ?, ?) OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ?",
-        ["product", "sellers", "facilities", "news", "product.%", "seller.%", "facilities.%", "news.%"]
+        "DELETE FROM permissions WHERE module IN (?, ?, ?) OR name LIKE ? OR name LIKE ? OR name LIKE ?",
+        ["product", "sellers", "facilities", "product.%", "seller.%", "facilities.%"]
       );
 
       await connection.execute(

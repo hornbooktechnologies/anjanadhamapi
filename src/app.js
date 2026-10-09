@@ -4,6 +4,7 @@ const rateLimit = require("express-rate-limit");
 const apiRouter = require("./routes");
 const errorMiddleware = require("./middlewares/error.middleware");
 const AppError = require("./utils/AppError");
+const { getProfileBlobUrl } = require('./utils/profileStorage');
 
 const path = require("path");
 
@@ -46,6 +47,15 @@ app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
 // Serve uploaded static files
+// Keep existing image URLs while serving portraits from deletable storage.
+app.get(['/uploads/portraits/*', '/uploads/key_members/*'], (req, res, next) => {
+  try {
+    const blobUrl = getProfileBlobUrl(req.path);
+    if (!blobUrl) return next();
+    res.setHeader('Cache-Control', 'no-store');
+    return res.redirect(307, blobUrl);
+  } catch (error) { next(error); }
+});
 app.use(
   "/uploads",
   express.static(uploadDirectory, {

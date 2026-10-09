@@ -257,7 +257,7 @@ async function updateSeoById(id, data) {
 // ==========================================
 async function getFooterDetails() {
   const details = await query("SELECT * FROM contact_details LIMIT 1");
-  const socialLinks = await query("SELECT * FROM social_links ORDER BY sequence ASC");
+  const socialLinks = await query("SELECT * FROM social_links ORDER BY sequence ASC, id ASC");
   return {
     contact: details[0] || { phone: "", email: "", address: "", footer_description: "" },
     socialLinks,
@@ -323,7 +323,7 @@ async function updateFooterDetails(data) {
             iconUrl,
             link.url,
             link.alt_text,
-            nextSocialSequence++,
+            link.sequence > 0 ? link.sequence : nextSocialSequence++,
             link.status || "active",
           ]
         );

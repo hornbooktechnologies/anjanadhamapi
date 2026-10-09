@@ -1,8 +1,7 @@
 const Joi = require("joi");
 
 const saveTeamMember = Joi.object({
-  group_name: Joi.string().valid("Board of Directors", "Leadership").required().messages({
-    "any.only": "Group must be Board of Directors or Leadership",
+  group_name: Joi.string().trim().max(255).required().messages({
     "string.empty": "Group is required",
   }),
   name: Joi.string().required().messages({
@@ -11,6 +10,7 @@ const saveTeamMember = Joi.object({
   designation: Joi.string().required().messages({
     "string.empty": "Designation is required",
   }),
+  location: Joi.string().trim().max(255).allow("", null).optional(),
   photo_url: Joi.string().required().messages({
     "string.empty": "Photo is required",
   }),
@@ -43,6 +43,12 @@ const updateLifeSection = Joi.object({
 });
 
 module.exports = {
+  saveTeamGroup: Joi.object({
+    title: Joi.string().trim().max(255).required(),
+    description: Joi.string().trim().max(5000).allow('', null).default(''),
+    sequence: Joi.number().integer().min(0).max(1000000).default(0),
+    status: Joi.string().valid('active', 'inactive').default('active'),
+  }),
   saveTeamMember,
   saveLifeAtGdb,
   updateLifeSection,

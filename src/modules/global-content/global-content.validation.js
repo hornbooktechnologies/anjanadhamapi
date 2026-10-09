@@ -33,9 +33,9 @@ const updateFooter = Joi.object({
   socialLinks: Joi.array().items(
     Joi.object({
       id: Joi.number().optional(),
-      platform_name: Joi.string().required(),
+      platform_name: Joi.string().trim().max(100).required(),
       icon_url: Joi.string().allow("", null),
-      url: Joi.string().uri().required(),
+      url: Joi.string().trim().max(255).uri({ scheme: ['http', 'https'] }).required(),
       alt_text: Joi.string().allow("", null),
       sequence: Joi.number().default(0),
       status: Joi.string().valid("active", "inactive").default("active"),

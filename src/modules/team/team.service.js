@@ -1,7 +1,9 @@
 const { query } = require("../../config/database");
 const AppError = require("../../utils/AppError");
 const { deleteStoredFile } = require("../../utils/fileUpload");
+const { changeProfileWithCleanup } = require('../../utils/profileCleanup');
 const { getNextSequence } = require("../../utils/sequence");
+const { validateMemberGroup, ensureTeamGroups } = require('./team-groups.service');
 
 async function hasTable(tableName) {
   const rows = await query(
@@ -37,17 +39,19 @@ async function getColumnType(tableName, columnName) {
 // ==========================================
 
 async function createMember(data) {
+  data = { ...data, group_name: await validateMemberGroup(data.group_name), location: data.location?.trim() || null };
   const sequence = await getNextSequence("team_members", {
     group_name: data.group_name,
   });
   const result = await query(
     `INSERT INTO team_members 
-     (group_name, name, designation, photo_url, photo_alt, linkedin_url, show_on_homepage, sequence, status) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (group_name, name, designation, location, photo_url, photo_alt, linkedin_url, show_on_homepage, sequence, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       data.group_name,
       data.name,
       data.designation,
+      data.location,
       data.photo_url,
       data.photo_alt,
       data.linkedin_url || null,
@@ -60,6 +64,7 @@ async function createMember(data) {
 }
 
 async function getMembers(filters = {}) {
+  await ensureTeamGroups();
   let sql = "SELECT * FROM team_members WHERE 1=1";
   const params = [];
 
@@ -113,6 +118,7 @@ async function getMembers(filters = {}) {
 }
 
 async function getMemberById(id) {
+  await ensureTeamGroups();
   const result = await query("SELECT * FROM team_members WHERE id = ?", [id]);
   if (result.length === 0) return null;
   return result[0];
@@ -124,23 +130,31 @@ async function updateMember(id, data) {
     throw new AppError("Team member not found", 404);
   }
 
-  await query(
+  data = {
+    ...data,
+    group_name: await validateMemberGroup(data.group_name, member.group_name),
+    location: data.location === undefined ? member.location || null : data.location?.trim() || null,
+  };
+
+  await changeProfileWithCleanup(
     `UPDATE team_members SET 
-     group_name = ?, name = ?, designation = ?, photo_url = ?, photo_alt = ?, 
+     group_name = ?, name = ?, designation = ?, location = ?, photo_url = ?, photo_alt = ?,
      linkedin_url = ?, show_on_homepage = ?, sequence = ?, status = ? 
      WHERE id = ?`,
     [
       data.group_name,
       data.name,
       data.designation,
+      data.location,
       data.photo_url,
       data.photo_alt,
-      data.linkedin_url || null,
+      data.linkedin_url === undefined ? member.linkedin_url || null : data.linkedin_url || null,
       data.show_on_homepage || 0,
       data.sequence || 0,
       data.status || "active",
       id,
-    ]
+    ],
+    member.photo_url !== data.photo_url ? member.photo_url : null
   );
 
   return { id, ...data };
@@ -151,12 +165,7 @@ async function deleteMember(id) {
   if (!member) {
     throw new AppError("Team member not found", 404);
   }
-  if (member.photo_url?.startsWith("/uploads/")) {
-    try {
-      deleteStoredFile(member.photo_url);
-    } catch (error) {}
-  }
-  await query("DELETE FROM team_members WHERE id = ?", [id]);
+  await changeProfileWithCleanup("DELETE FROM team_members WHERE id = ?", [id], member.photo_url);
 }
 
 async function toggleMemberStatus(id) {

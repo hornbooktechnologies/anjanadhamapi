@@ -1,6 +1,6 @@
 const { query } = require('../../config/database');
 const AppError = require('../../utils/AppError');
-const { isStoredFileReferenced, deleteStoredFile } = require('../../utils/fileUpload');
+const { changeProfileWithCleanup } = require('../../utils/profileCleanup');
 const { overlayEntityTranslations, saveEntityTranslations, deleteEntityTranslations } = require('../translations/translations.service');
 const fields = ['name', 'location', 'initiative', 'photo_alt'];
 let schemaPromise;
@@ -41,22 +41,17 @@ async function saveDonor(id, data) {
   const previous = id ? await getDonor(id) : null;
   const values = [data.name, data.location || null, data.amount, data.initiative || null,
     data.contribution_date, data.photo_url || null, data.photo_alt || data.name, data.status];
-  if (id) await query('UPDATE donors SET name=?, location=?, amount=?, initiative=?, contribution_date=?, photo_url=?, photo_alt=?, status=? WHERE id=?', [...values, id]);
+  if (id) await changeProfileWithCleanup('UPDATE donors SET name=?, location=?, amount=?, initiative=?, contribution_date=?, photo_url=?, photo_alt=?, status=? WHERE id=?', [...values, id], previous.photo_url !== values[5] ? previous.photo_url : null);
   else {
     const result = await query('INSERT INTO donors (name,location,amount,initiative,contribution_date,photo_url,photo_alt,status) VALUES (?,?,?,?,?,?,?,?)', values);
     id = result.insertId;
   }
   if (data.translations) await saveEntityTranslations('donors', id, data.translations);
-  if (previous?.photo_url && previous.photo_url !== data.photo_url) await cleanupPhoto(previous.photo_url);
   return getDonor(id);
-}
-async function cleanupPhoto(url) {
-  if (url?.startsWith('/uploads/') && !await isStoredFileReferenced(url)) deleteStoredFile(url);
 }
 async function removeDonor(id) {
   const donor = await getDonor(id);
-  await query('DELETE FROM donors WHERE id = ?', [id]);
+  await changeProfileWithCleanup('DELETE FROM donors WHERE id = ?', [id], donor.photo_url);
   await deleteEntityTranslations('donors', id);
-  await cleanupPhoto(donor.photo_url);
 }
 module.exports = { ensureDonorsTable, getDonors, getDonor, saveDonor, removeDonor };

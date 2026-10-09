@@ -2,7 +2,7 @@ const nodemailer = require("nodemailer");
 const env = require("../config/env");
 
 // Create transport
-const transporter = nodemailer.createTransport({
+const transportOptions = {
   host: env.mail.host,
   port: env.mail.port,
   secure: env.mail.port === 465,
@@ -10,13 +10,14 @@ const transporter = nodemailer.createTransport({
     user: env.mail.user,
     pass: env.mail.password,
   },
-});
+};
+const transporter = nodemailer.createTransport(transportOptions);
 
 /**
  * Send an email
  * @param {object} options { to, subject, text, html }
  */
-const sendMail = async ({ to, subject, text, html }) => {
+const sendMail = async ({ to, subject, text, html, timeoutMs }) => {
   const mailOptions = {
     from: env.mail.from,
     to,
@@ -35,7 +36,10 @@ const sendMail = async ({ to, subject, text, html }) => {
     return { messageId: "simulated-id-" + Date.now() };
   }
 
-  return await transporter.sendMail(mailOptions);
+  const transport = timeoutMs ? nodemailer.createTransport({ ...transportOptions,
+    connectionTimeout: timeoutMs, greetingTimeout: timeoutMs, socketTimeout: timeoutMs,
+  }) : transporter;
+  return await transport.sendMail(mailOptions);
 };
 
 module.exports = {

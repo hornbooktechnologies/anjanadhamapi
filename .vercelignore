@@ -1,0 +1,6 @@
+# Profile bytes live in Blob; bundling them would leave immutable copies behind.
+uploads/portraits/**
+uploads/key_members/**
+public/uploads/portraits/**
+public/uploads/key_members/**
+test/**

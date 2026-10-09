@@ -3,6 +3,7 @@ const path = require("path");
 
 // Load env variables
 dotenv.config({ path: path.join(__dirname, "../../.env") });
+dotenv.config({ path: path.join(__dirname, "../../.env.local") });
 
 module.exports = {
   port: process.env.PORT || 5000,
@@ -31,6 +32,7 @@ module.exports = {
     from: process.env.SMTP_FROM,
   },
   otp: {
+    logToConsole: process.env.LOGIN_OTP_LOG_TO_CONSOLE === "true",
     recipientEmail:
       process.env.LOGIN_OTP_RECIPIENT_EMAIL || "panchal.mehul6015@gmail.com",
   },

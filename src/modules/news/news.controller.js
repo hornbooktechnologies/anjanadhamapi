@@ -64,6 +64,11 @@ const getNewsContent = async (req, res) => {
   );
 };
 
+const getPublicAnnouncements = async (req, res) => {
+  const result = await service.getPublicAnnouncements(req.query);
+  return successResponse(res, "Announcements fetched successfully", result.data, 200, result.pagination);
+};
+
 const getNewsById = async (req, res) => {
   const result = await service.getNewsById(req.params.id);
   if (!result) {
@@ -96,6 +101,7 @@ module.exports = {
   toggleCategoryStatus,
   createNews,
   getNewsContent,
+  getPublicAnnouncements,
   getNewsById,
   updateNews,
   deleteNews,

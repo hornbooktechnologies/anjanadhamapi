@@ -1,6 +1,7 @@
 const { query } = require("../../config/database");
 const AppError = require("../../utils/AppError");
-const { uploadBase64File, deleteStoredFile } = require("../../utils/fileUpload");
+const { uploadBase64File } = require("../../utils/fileUpload");
+const { changeProfileWithCleanup } = require('../../utils/profileCleanup');
 const { getNextSequence } = require("../../utils/sequence");
 const {
   saveEntityTranslations,
@@ -150,12 +151,9 @@ async function updateKeyMember(id, data) {
   let savedPhoto = photo_url !== undefined ? photo_url : prev.photo_url;
   if (photo_url && photo_url.startsWith("data:")) {
     savedPhoto = await uploadBase64File(photo_url, "key_members");
-    if (prev.photo_url && prev.photo_url.startsWith("/uploads/")) {
-      try { deleteStoredFile(prev.photo_url); } catch (e) { }
-    }
   }
 
-  await query(
+  await changeProfileWithCleanup(
     `UPDATE key_members
      SET name = ?, designation = ?, location = ?, short_description = ?, description = ?, photo_url = ?, photo_alt = ?, sequence = ?, status = ?
      WHERE id = ?`,
@@ -170,7 +168,8 @@ async function updateKeyMember(id, data) {
       sequence,
       status || prev.status,
       id,
-    ]
+    ],
+    prev.photo_url !== savedPhoto ? prev.photo_url : null
   );
 
   if (translations) {
@@ -183,11 +182,7 @@ async function updateKeyMember(id, data) {
 async function deleteKeyMember(id) {
   await ensureKeyMembersTable();
   const member = await getKeyMemberById(id);
-  if (member.photo_url && member.photo_url.startsWith("/uploads/")) {
-    try { deleteStoredFile(member.photo_url); } catch (e) { }
-  }
-
-  await query("DELETE FROM key_members WHERE id = ?", [id]);
+  await changeProfileWithCleanup("DELETE FROM key_members WHERE id = ?", [id], member.photo_url);
   await deleteEntityTranslations("key_members", id);
   return { id: Number(id), deleted: true };
 }

@@ -3,6 +3,7 @@ const { generateAccessToken, generateRefreshToken } = require("../../utils/jwt")
 const { successResponse } = require("../../utils/response");
 const AppError = require("../../utils/AppError");
 const { sendMail } = require("../../utils/mailer");
+const { deliverLoginOtp } = require('../../utils/loginOtpDelivery');
 const env = require("../../config/env");
 const bcrypt = require("bcryptjs");
 
@@ -41,12 +42,12 @@ const login = async (req, res) => {
   const loginUserLabel = `${user.name || "Admin user"} (${user.email})`;
   const loginUserHtml = escapeHtml(loginUserLabel);
 
-  await sendMail({
+  await deliverLoginOtp({ otp, loginEmail: user.email, mailOptions: {
     to: otpRecipientEmail,
     subject: `Vishw Anjanadham login OTP for ${user.email}`,
     text: `${loginUserLabel} is trying to login. OTP: ${otp}. It expires in 10 minutes.`,
     html: `<p><strong>${loginUserHtml}</strong> is trying to login.</p><p>OTP: <strong>${otp}</strong></p><p>It expires in 10 minutes.</p>`,
-  });
+  } });
 
   return successResponse(res, "OTP sent to assigned Super Admin", {
     requiresOtp: true,

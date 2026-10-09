@@ -7,8 +7,10 @@ const { query } = require("../config/database");
 const {
   getUploadRootDir,
   getUploadTargetDir,
-  getAbsolutePathFromPublicUploadPath,
+  normalizeUploadPath,
+  getUploadFileCopies,
 } = require("./uploadStorage");
+const { writeProfileFile, deleteProfileBlob } = require('./profileStorage');
 
 const WEBP_TARGET_QUALITIES = [85, 80, 75, 70];
 const WEBP_INPUT_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
@@ -28,6 +30,16 @@ const FILE_REFERENCE_COLUMNS = [
   { table: "team_members", column: "photo_url" },
   { table: "key_members", column: "photo_url" },
   { table: "donors", column: "photo_url" },
+  { table: "blogs", column: "image_url" },
+  { table: "documents", column: "file_url" },
+  { table: "about_gdb_journey_timeline_items", column: "icon_url" },
+  { table: "about_gdb_journey_timeline_items", column: "image_url" },
+  { table: "case_studies", column: "image_url" },
+  { table: "product_catalogue", column: "image_url" },
+  { table: "quality_assurance_cards", column: "icon_url" },
+  { table: "seller_always_buying", column: "file_url" },
+  { table: "seller_feedstock", column: "image_url" },
+  { table: "seller_logistics_cards", column: "icon_url" },
   { table: "team_life_gallery", column: "file_url" },
   { table: "news_content", column: "image_url" },
   { table: "news_content", column: "logo_url" },
@@ -151,6 +163,12 @@ function buildPublicUploadPath(subFolder, filename) {
 }
 
 async function writeStoredFile({ buffer, extension, subFolder = "general" }) {
+  if (subFolder === 'key_members' || subFolder === 'portraits') {
+    const url = buildPublicUploadPath(subFolder, `${crypto.randomBytes(16).toString('hex')}.${extension}`);
+    await require('./profileCleanup').scheduleProfileCleanup(url, 24 * 60 * 60 * 1000);
+    await writeProfileFile(url, buffer, extension === 'webp' ? 'image/webp' : undefined);
+    return url;
+  }
   ensureUploadDirectories();
   const targetDir = getUploadTargetDir(subFolder);
   const filename = `${crypto.randomBytes(16).toString("hex")}.${extension}`;
@@ -207,17 +225,16 @@ async function saveUploadedBuffer(file, subFolder = "") {
 }
 
 function deleteStoredFile(relativePath) {
-  if (!relativePath) return false;
-  try {
-    const abs = getAbsolutePathFromPublicUploadPath(relativePath);
-    if (fs.existsSync(abs)) {
-      fs.unlinkSync(abs);
-      return true;
+  let deleted = false;
+  for (const file of getUploadFileCopies(relativePath)) {
+    try {
+      fs.unlinkSync(file);
+      deleted = true;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
     }
-    return false;
-  } catch (err) {
-    return false;
   }
+  return deleted;
 }
 
 async function isStoredFileReferenced(relativePath) {
@@ -225,38 +242,46 @@ async function isStoredFileReferenced(relativePath) {
     return false;
   }
 
-  const normalizedPath = relativePath.trim();
-  if (!normalizedPath.startsWith("/uploads/")) {
+  const normalizedPath = normalizeUploadPath(relativePath);
+  if (!normalizedPath) {
     return false;
   }
 
   for (const ref of FILE_REFERENCE_COLUMNS) {
     try {
       const rows = await query(
-        `SELECT 1 AS matched FROM ${ref.table} WHERE ${ref.column} = ? LIMIT 1`,
-        [normalizedPath]
+        `SELECT 1 AS matched FROM ${ref.table} WHERE ${ref.column} = ? OR RIGHT(${ref.column}, ?) = ? LIMIT 1`,
+        [normalizedPath, normalizedPath.length, normalizedPath]
       );
       if (rows.length) {
         return true;
       }
     } catch (error) {
-      // Ignore missing tables/columns so cleanup can still proceed for other refs.
+      if (!['ER_NO_SUCH_TABLE', 'ER_BAD_FIELD_ERROR'].includes(error.code)) throw error;
     }
   }
 
   try {
     const overviewRows = await query(
-      "SELECT 1 AS matched FROM about_gdb_overview WHERE images LIKE ? LIMIT 1",
-      [`%${normalizedPath}%`]
+      "SELECT 1 AS matched FROM about_gdb_overview WHERE LOCATE(?, images) > 0 LIMIT 1",
+      [normalizedPath]
     );
     if (overviewRows.length) {
       return true;
     }
   } catch (error) {
-    // Ignore if table does not exist.
+    if (!['ER_NO_SUCH_TABLE', 'ER_BAD_FIELD_ERROR'].includes(error.code)) throw error;
   }
 
   return false;
+}
+
+async function cleanupStoredFile(url) {
+  if (!normalizeUploadPath(url)) return { deleted: false, skipped: true };
+  if (await isStoredFileReferenced(url)) return { deleted: false, skipped: true };
+  const cloudDeleted = await deleteProfileBlob(url);
+  const localDeleted = deleteStoredFile(url);
+  return { deleted: cloudDeleted || localDeleted, skipped: false };
 }
 
 module.exports = {
@@ -264,4 +289,5 @@ module.exports = {
   saveUploadedBuffer,
   deleteStoredFile,
   isStoredFileReferenced,
+  cleanupStoredFile,
 };

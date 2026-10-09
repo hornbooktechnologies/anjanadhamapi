@@ -6,8 +6,11 @@ const validate = require("../../middlewares/validate.middleware");
 const authMiddleware = require("../../middlewares/auth.middleware");
 const checkPermission = require("../../middlewares/permission.middleware");
 const asyncHandler = require("../../utils/asyncHandler");
+const groups = require('./team-groups.service');
+const { successResponse } = require('../../utils/response');
 
 // Public GET routes
+router.get('/groups', asyncHandler(async (req, res) => successResponse(res, 'Team groups fetched', await groups.getGroups(req.query))));
 router.get("/members", asyncHandler(ctrl.getMembers));
 router.get("/members/:id", asyncHandler(ctrl.getMemberById));
 router.get("/life-at-gdb/section", asyncHandler(ctrl.getLifeSection));
@@ -15,6 +18,13 @@ router.get("/life-at-gdb", asyncHandler(ctrl.getLifeItems));
 router.get("/life-at-gdb/:id", asyncHandler(ctrl.getLifeItemById));
 
 router.use(authMiddleware);
+
+router.post('/groups', checkPermission('team.members.create'), validate(v.saveTeamGroup),
+  asyncHandler(async (req, res) => successResponse(res, 'Team group created', await groups.saveGroup(null, req.body), 201)));
+router.put('/groups/:id', checkPermission('team.members.update'), validate(v.saveTeamGroup),
+  asyncHandler(async (req, res) => successResponse(res, 'Team group updated', await groups.saveGroup(req.params.id, req.body))));
+router.delete('/groups/:id', checkPermission('team.members.delete'),
+  asyncHandler(async (req, res) => successResponse(res, 'Team group deleted', await groups.deleteGroup(req.params.id))));
 
 // ==========================================
 // TEAM MEMBERS ROUTES
