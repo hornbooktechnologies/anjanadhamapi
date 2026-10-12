@@ -2,6 +2,7 @@ const { query, transaction } = require("../../config/database");
 const AppError = require("../../utils/AppError");
 const { uploadBase64File, deleteStoredFile } = require("../../utils/fileUpload");
 const { sendMail } = require("../../utils/mailer");
+const { buildUserEmail, buildAdminEmail } = require('../contact-enquiries/contact-enquiries.emails');
 const { getNextSequence } = require("../../utils/sequence");
 
 function parseSchemaJson(schemaJson) {
@@ -518,29 +519,14 @@ async function createInquiry(data) {
     page_url: page_url || null,
   });
 
-  // Send email alert to admin
-  try {
-    const adminEmail = process.env.SMTP_ADMIN_EMAIL || "info@anjanadham.org";
-    const mailText = `
-      You received a new inquiry on Vishw Anjanadham website:
-
-      Name: ${created.full_name}
-      Email: ${email}
-      Phone Number: ${phone_number || "N/A"}
-      Inquiry Purpose: ${inquiry_purpose || "N/A"}
-      Message: ${message || "N/A"}
-      Page URL: ${page_url || "N/A"}
-      Submitted At: ${new Date().toLocaleString()}
-    `;
-
-    await sendMail({
-      to: adminEmail,
-      subject: `New Contact Inquiry - ${created.full_name}`,
-      text: mailText,
-    });
-  } catch (err) {
-    console.error("Failed to send admin inquiry notification email:", err);
-  }
+  const payload = { ...data, full_name: created.full_name, form_type: 'contact' };
+  const deliveries = await Promise.allSettled([
+    sendMail({ to: email, ...buildUserEmail(payload), timeoutMs: 8000 }),
+    sendMail({ to: process.env.SMTP_ADMIN_EMAIL || 'info@anjanadham.org', ...buildAdminEmail(payload, result.insertId), timeoutMs: 8000 }),
+  ]);
+  deliveries.forEach((delivery, index) => {
+    if (delivery.status === 'rejected') console.error(`Failed to send ${index === 0 ? 'confirmation' : 'admin inquiry notification'} email:`, delivery.reason);
+  });
 
   return created;
 }

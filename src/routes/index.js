@@ -81,6 +81,7 @@ router.use("/donors", donorsRoutes);
 router.use("/blogs", blogsRoutes);
 router.use("/news", newsRoutes);
 router.use("/contact-enquiries", contactEnquiriesRoutes);
+router.use("/donations", require('../modules/donations/donations.routes'));
 router.use("/translations", translationsRoutes);
 router.use("/documents", documentsRoutes);
 

@@ -30,6 +30,11 @@ module.exports = {
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
     from: process.env.SMTP_FROM,
+    adminEmail: process.env.SMTP_ADMIN_EMAIL || "info@anjanadham.org",
+  },
+  razorpay: {
+    keyId: process.env.RAZORPAY_KEY_ID,
+    keySecret: process.env.RAZORPAY_KEY_SECRET,
   },
   otp: {
     logToConsole: process.env.LOGIN_OTP_LOG_TO_CONSOLE === "true",

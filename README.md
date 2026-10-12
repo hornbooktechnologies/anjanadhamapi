@@ -58,10 +58,28 @@ SMTP_PORT=2525
 SMTP_USER=dummy_user
 SMTP_PASSWORD=dummy_password
 SMTP_FROM="Vishw Anjanadham App <no-reply@anjanadham.com>"
+SMTP_ADMIN_EMAIL=info@anjanadham.org
+
+# Razorpay Standard Checkout (server only; both values are required)
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 
 # Login OTP Delivery
 LOGIN_OTP_RECIPIENT_EMAIL=panchal.mehul6015@gmail.com
 ```
+
+The contact, membership, and volunteer forms send a simple thank-you email to
+the applicant and a separate HTML table containing all submitted fields to
+`SMTP_ADMIN_EMAIL`. Each delivery is attempted independently after the inquiry
+is saved.
+
+When both Razorpay keys are configured, donations use Standard Checkout with
+server-created orders, signature verification, amount checks, and payment
+capture before showing the thank-you modal. Payment failures and cancellations
+show separate modals; an uncertain result shows a pending confirmation message.
+Without these keys, the site retains its existing hosted Razorpay Payment Button.
+That button reports success through its trusted iframe callback, while bank
+declines remain inside Razorpay's hosted checkout.
 
 ### 2. Install Dependencies
 ```bash

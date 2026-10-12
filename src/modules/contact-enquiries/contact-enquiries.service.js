@@ -1,6 +1,8 @@
 const { query } = require("../../config/database");
 const { sendMail } = require("../../utils/mailer");
 const { formPurposes, detailFields, normalizeSubmission } = require('./contact-enquiries.forms');
+const env = require('../../config/env');
+const { buildUserEmail, buildAdminEmail } = require('./contact-enquiries.emails');
 
 let initialization;
 
@@ -45,29 +47,6 @@ function normalizeDateFilter(value, endOfDay = false) {
     : value;
 }
 
-function buildUserEmail({ full_name, inquiry_purpose, message }) {
-  const escape = value => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-  const text = `Dear ${full_name},
-
-Thank you for contacting Vishw Anjanadham. We have received your inquiry and our team will get back to you shortly.
-
-Inquiry Purpose: ${inquiry_purpose}
-Message: ${message}
-
-Regards,
-Vishw Anjanadham Team`;
-
-  const html = `
-    <p>Dear ${escape(full_name)},</p>
-    <p>Thank you for contacting <strong>Vishw Anjanadham</strong>. We have received your inquiry and our team will get back to you shortly.</p>
-    <p><strong>Inquiry Purpose:</strong> ${escape(inquiry_purpose)}</p>
-    <p><strong>Message:</strong><br/>${escape(message).replace(/\n/g, "<br/>")}</p>
-    <p>Regards,<br/>Vishw Anjanadham Team</p>
-  `;
-
-  return { text, html };
-}
-
 async function createContactEnquiry(data) {
   await ensureContactEnquiriesTable();
 
@@ -99,26 +78,28 @@ async function createContactEnquiry(data) {
     ]
   );
 
-  let emailSent = false;
+  // Deliver independently so an SMTP failure for one recipient does not block the other.
+  const [userDelivery, adminDelivery] = await Promise.allSettled([
+    sendMail({ to: payload.email, ...buildUserEmail(payload), timeoutMs: 8000 }),
+    sendMail({ to: env.mail.adminEmail, ...buildAdminEmail(payload, result.insertId), timeoutMs: 8000 }),
+  ]);
+  const emailSent = userDelivery.status === 'fulfilled';
+  const adminEmailSent = adminDelivery.status === 'fulfilled';
+  if (!emailSent) console.error('Failed to send contact enquiry confirmation email:', userDelivery.reason);
+  if (!adminEmailSent) console.error('Failed to send admin inquiry notification email:', adminDelivery.reason);
   try {
-    const emailContent = buildUserEmail(payload);
-    await sendMail({
-      to: payload.email,
-      subject: "We received your inquiry - Vishw Anjanadham",
-      text: emailContent.text,
-      html: emailContent.html,
-      timeoutMs: 8000,
-    });
-    emailSent = true;
-    await query("UPDATE contact_enquiries SET email_sent = 1 WHERE id = ?", [result.insertId]);
+    if (emailSent) {
+      await query("UPDATE contact_enquiries SET email_sent = 1 WHERE id = ?", [result.insertId]);
+    }
   } catch (error) {
-    console.error("Failed to send contact enquiry confirmation email:", error);
+    console.error("Failed to record contact enquiry email delivery:", error);
   }
 
   return {
     id: result.insertId,
     ...payload,
     email_sent: emailSent,
+    admin_email_sent: adminEmailSent,
   };
 }
 async function getContactEnquiries({ search = "", purpose = "", formType = "", startDate = "", endDate = "", page = 1, limit = 10 } = {}) {

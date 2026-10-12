@@ -23,7 +23,9 @@ test('all three forms validate; missing consent, invalid choices and malformed d
   assert.ok(submitContactEnquiry.validate({ ...applications.membership, details: undefined }).error);
 });
 
-let records = [], migrationCount = 0, createCount = 0, mailFailure = false, capturedMail;
+let records = [], migrationCount = 0, createCount = 0, mailFailure = false, failedRecipient = '', capturedMail = [];
+const env = require('../src/config/env');
+env.mail.adminEmail = 'admin@example.com';
 const database = require.resolve('../src/config/database');
 require.cache[database] = { id: database, filename: database, loaded: true, exports: { query: async (sql, values = []) => {
   if (sql.includes('CREATE TABLE')) { createCount++; return {}; }
@@ -41,22 +43,38 @@ require.cache[database] = { id: database, filename: database, loaded: true, expo
   throw new Error('Unexpected SQL: ' + sql);
 } } };
 const mailer = require.resolve('../src/utils/mailer');
-require.cache[mailer] = { id: mailer, filename: mailer, loaded: true, exports: { sendMail: async payload => { capturedMail = payload; if (mailFailure) throw new Error('SMTP unavailable'); } } };
+require.cache[mailer] = { id: mailer, filename: mailer, loaded: true, exports: { sendMail: async payload => { capturedMail.push(payload); if (mailFailure || payload.to === failedRecipient) throw new Error('SMTP unavailable'); } } };
 const service = require('../src/modules/contact-enquiries/contact-enquiries.service');
 
 test('all forms persist all fields, initialize once, filter types, and retain legacy rows', async () => {
   await Promise.all([service.ensureContactEnquiriesTable(), service.ensureContactEnquiriesTable()]);
   assert.equal(createCount, 1); assert.equal(migrationCount, 1);
   for (const payload of Object.values(applications)) {
+    capturedMail = [];
     const validated = submitContactEnquiry.validate(payload).value;
     const saved = await service.createContactEnquiry(validated);
     assert.equal(saved.email_sent, true);
+    assert.equal(saved.admin_email_sent, true);
+    assert.equal(capturedMail.length, 2);
+    const confirmation = capturedMail.find(mail => mail.to === basic.email);
+    const admin = capturedMail.find(mail => mail.to === env.mail.adminEmail);
+    assert.match(confirmation.text, /Thank you/);
+    assert.ok(!confirmation.html.includes('<table'));
+    assert.ok(!confirmation.text.includes(saved.message));
+    assert.ok(!confirmation.text.includes(saved.inquiry_purpose));
+    assert.ok(admin.html.includes('<table'));
+    assert.ok(admin.text.includes(payload.email));
+    if (payload.details) {
+      for (const field of normalizeSubmission({ details: validated.details }).detail_fields) {
+        assert.ok(admin.text.includes(`${field.label}: ${field.value}`));
+      }
+    }
     const row = records.find(record => record.id === saved.id);
     if (payload.details) assert.deepEqual(JSON.parse(row.details), validated.details);
     else {
       assert.equal(row.message, payload.message);
-      assert.ok(capturedMail.html.includes('&lt;script&gt;'));
-      assert.ok(!capturedMail.html.includes('<script>'));
+      assert.ok(admin.html.includes('&lt;script&gt;'));
+      assert.ok(!admin.html.includes('<script>'));
     }
   }
   const volunteer = await service.getContactEnquiries({ formType: 'volunteer' });
@@ -73,6 +91,21 @@ test('SMTP failure does not turn a successfully saved inquiry into a failed subm
   try {
     const result = await service.createContactEnquiry(applications.contact);
     assert.equal(result.email_sent, false);
+    assert.equal(result.admin_email_sent, false);
     assert.ok(records.some(row => row.id === result.id));
-  } finally { console.error = oldError; }
+  } finally { console.error = oldError; mailFailure = false; }
+});
+
+test('each recipient is attempted even when the other email fails', async () => {
+  const oldError = console.error; console.error = () => {};
+  try {
+    for (const recipient of [basic.email, env.mail.adminEmail]) {
+      capturedMail = []; failedRecipient = recipient;
+      const result = await service.createContactEnquiry(applications.contact);
+      assert.equal(capturedMail.length, 2);
+      assert.equal(result.email_sent, recipient !== basic.email);
+      assert.equal(result.admin_email_sent, recipient !== env.mail.adminEmail);
+      assert.ok(records.some(row => row.id === result.id));
+    }
+  } finally { console.error = oldError; failedRecipient = ''; }
 });
