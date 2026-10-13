@@ -4,6 +4,8 @@ const { uploadBase64File, deleteStoredFile } = require("../../utils/fileUpload")
 const { sendMail } = require("../../utils/mailer");
 const { buildUserEmail, buildAdminEmail } = require('../contact-enquiries/contact-enquiries.emails');
 const { getNextSequence } = require("../../utils/sequence");
+const env = require('../../config/env');
+const { normalizeSeoPage, ensureSeoPageLength, normalizeSeoInput } = require('../../utils/seoPage');
 
 function parseSchemaJson(schemaJson) {
   const trimmed = typeof schemaJson === "string" ? schemaJson.trim() : "";
@@ -80,21 +82,28 @@ function attachParsedSchema(entry) {
 // 1. SEO & AIEO Services
 // ==========================================
 async function getAllSeoContent() {
+  await ensureSeoPageLength();
   const rows = await query("SELECT * FROM seo_content ORDER BY id DESC");
   return rows.map(attachParsedSchema);
 }
 
 async function getSeoByPage(page) {
-  const results = await query("SELECT * FROM seo_content WHERE page = ?", [page]);
+  await ensureSeoPageLength();
+  const normalized = normalizeSeoPage(page);
+  const aliases = [...new Set([normalized, `/${normalized}`, `/${normalized}/`, `${normalized}/`, ...(normalized === 'home' ? ['/'] : [])])];
+  const results = await query(`SELECT * FROM seo_content WHERE page IN (${aliases.map(() => '?').join(', ')}) ORDER BY (page = ?) DESC, id DESC LIMIT 1`, [...aliases, normalized]);
   return attachParsedSchema(results[0] || null);
 }
 
 async function getSeoById(id) {
+  await ensureSeoPageLength();
   const results = await query("SELECT * FROM seo_content WHERE id = ?", [id]);
   return attachParsedSchema(results[0] || null);
 }
 
 async function createOrUpdateSeo(data) {
+  await ensureSeoPageLength();
+  data = normalizeSeoInput(data);
   const normalizedSchema = normalizeSeoSchemaInput(data);
   const {
     page,
@@ -192,6 +201,8 @@ async function deleteSeo(id) {
 }
 
 async function updateSeoById(id, data) {
+  await ensureSeoPageLength();
+  data = normalizeSeoInput(data);
   const existing = await query("SELECT id FROM seo_content WHERE id = ?", [id]);
   if (existing.length === 0) throw new AppError("SEO content not found", 404);
 
@@ -522,7 +533,7 @@ async function createInquiry(data) {
   const payload = { ...data, full_name: created.full_name, form_type: 'contact' };
   const deliveries = await Promise.allSettled([
     sendMail({ to: email, ...buildUserEmail(payload), timeoutMs: 8000 }),
-    sendMail({ to: process.env.SMTP_ADMIN_EMAIL || 'info@anjanadham.org', ...buildAdminEmail(payload, result.insertId), timeoutMs: 8000 }),
+    sendMail({ to: env.mail.adminEmail, ...buildAdminEmail(payload, result.insertId), timeoutMs: 8000 }),
   ]);
   deliveries.forEach((delivery, index) => {
     if (delivery.status === 'rejected') console.error(`Failed to send ${index === 0 ? 'confirmation' : 'admin inquiry notification'} email:`, delivery.reason);

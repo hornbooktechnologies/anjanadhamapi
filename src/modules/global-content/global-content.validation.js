@@ -6,9 +6,9 @@ const schemaEntry = Joi.object({
 });
 
 const saveSeo = Joi.object({
-  page: Joi.string().required(),
-  meta_title: Joi.string().allow("", null),
-  meta_description: Joi.string().allow("", null),
+  page: Joi.string().trim().max(255).required(),
+  meta_title: Joi.string().trim().max(255).allow("", null),
+  meta_description: Joi.string().trim().max(1000).allow("", null),
   canonical_url: Joi.string().allow("", null),
   robots_tag: Joi.string().allow("", null),
   og_title: Joi.string().allow("", null),

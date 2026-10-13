@@ -20,6 +20,7 @@ const transporter = nodemailer.createTransport(transportOptions);
 const sendMail = async ({ to, subject, text, html, timeoutMs }) => {
   const mailOptions = {
     from: env.mail.from,
+    replyTo: env.mail.replyTo,
     to,
     subject,
     text,

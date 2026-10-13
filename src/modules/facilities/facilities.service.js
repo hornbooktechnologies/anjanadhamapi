@@ -1,5 +1,6 @@
 const { query } = require("../../config/database");
 const AppError = require("../../utils/AppError");
+const { ensureContentSeoColumns, seoValue } = require("../../utils/contentSeo");
 const { uploadBase64File, deleteStoredFile } = require("../../utils/fileUpload");
 const { getNextSequence, resequenceTable } = require("../../utils/sequence");
 const {
@@ -9,6 +10,8 @@ const {
 } = require("../translations/translations.service");
 
 const TRANSLATABLE_FIELDS = [
+  "meta_title",
+  "meta_description",
   "title",
   "category",
   "short_description",
@@ -28,12 +31,15 @@ async function ensureFacilitiesTable() {
       metric VARCHAR(100) NULL,
       image_url TEXT NULL,
       image_alt VARCHAR(255) NULL,
+      meta_title VARCHAR(255) NULL,
+      meta_description TEXT NULL,
       sequence INT DEFAULT 0,
       status ENUM('active','inactive') DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  await ensureContentSeoColumns("facilities");
 }
 
 async function getAllFacilities({ search = "", category = "", status = "", page, limit, lang = "en" } = {}) {
@@ -118,8 +124,8 @@ async function createFacility(data) {
   }
 
   const result = await query(
-    `INSERT INTO facilities (title, category, short_description, description, metric, image_url, image_alt, sequence, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO facilities (title, category, short_description, description, metric, image_url, image_alt, sequence, status, meta_title, meta_description)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       title ? title.trim() : "",
       category ? category.trim() : null,
@@ -130,6 +136,8 @@ async function createFacility(data) {
       image_alt ? image_alt.trim() : (title ? title.trim() : null),
       sequence,
       status,
+      seoValue(data.meta_title),
+      seoValue(data.meta_description),
     ]
   );
 
@@ -166,7 +174,7 @@ async function updateFacility(id, data) {
 
   await query(
     `UPDATE facilities
-     SET title = ?, category = ?, short_description = ?, description = ?, metric = ?, image_url = ?, image_alt = ?, sequence = ?, status = ?
+     SET title = ?, category = ?, short_description = ?, description = ?, metric = ?, image_url = ?, image_alt = ?, sequence = ?, status = ?, meta_title = ?, meta_description = ?
      WHERE id = ?`,
     [
       title !== undefined ? title.trim() : prev.title,
@@ -178,6 +186,8 @@ async function updateFacility(id, data) {
       image_alt !== undefined ? (image_alt ? image_alt.trim() : null) : prev.image_alt,
       sequence,
       status || prev.status,
+      seoValue(data.meta_title, prev.meta_title),
+      seoValue(data.meta_description, prev.meta_description),
       id,
     ]
   );

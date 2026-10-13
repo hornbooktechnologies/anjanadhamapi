@@ -57,7 +57,8 @@ SMTP_HOST=smtp.mailtrap.io
 SMTP_PORT=2525
 SMTP_USER=dummy_user
 SMTP_PASSWORD=dummy_password
-SMTP_FROM="Vishw Anjanadham App <no-reply@anjanadham.com>"
+SMTP_FROM="Vishwa Anjanadham <contact@hornbooktechnologies.com>"
+SMTP_REPLY_TO=contact@hornbooktechnologies.com
 SMTP_ADMIN_EMAIL=info@anjanadham.org
 
 # Razorpay Standard Checkout (server only; both values are required)

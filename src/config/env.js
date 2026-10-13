@@ -29,7 +29,8 @@ module.exports = {
     port: parseInt(process.env.SMTP_PORT || "587", 10),
     user: process.env.SMTP_USER,
     password: process.env.SMTP_PASSWORD,
-    from: process.env.SMTP_FROM,
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    replyTo: process.env.SMTP_REPLY_TO || process.env.SMTP_USER,
     adminEmail: process.env.SMTP_ADMIN_EMAIL || "info@anjanadham.org",
   },
   razorpay: {

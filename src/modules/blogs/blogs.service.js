@@ -1,5 +1,6 @@
 const { query } = require("../../config/database");
 const AppError = require("../../utils/AppError");
+const { ensureContentSeoColumns, seoValue } = require("../../utils/contentSeo");
 const { uploadBase64File, deleteStoredFile } = require("../../utils/fileUpload");
 const { getNextSequence, resequenceTable } = require("../../utils/sequence");
 const {
@@ -9,6 +10,8 @@ const {
 } = require("../translations/translations.service");
 
 const TRANSLATABLE_FIELDS = [
+  "meta_title",
+  "meta_description",
   "title",
   "category",
   "author",
@@ -31,12 +34,15 @@ async function ensureBlogsTable() {
       description LONGTEXT NULL,
       image_url TEXT NULL,
       image_alt VARCHAR(255) NULL,
+      meta_title VARCHAR(255) NULL,
+      meta_description TEXT NULL,
       sequence INT DEFAULT 0,
       status ENUM('active','inactive') DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  await ensureContentSeoColumns("blogs");
 }
 
 async function getAllBlogs({ search = "", category = "", status = "", page, limit, lang = "en" } = {}) {
@@ -123,8 +129,8 @@ async function createBlog(data) {
   }
 
   const result = await query(
-    `INSERT INTO blogs (title, category, author, publish_date, read_time, short_description, description, image_url, image_alt, sequence, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO blogs (title, category, author, publish_date, read_time, short_description, description, image_url, image_alt, sequence, status, meta_title, meta_description)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       title ? title.trim() : "",
       category ? category.trim() : null,
@@ -137,6 +143,8 @@ async function createBlog(data) {
       image_alt ? image_alt.trim() : (title ? title.trim() : null),
       sequence,
       status,
+      seoValue(data.meta_title),
+      seoValue(data.meta_description),
     ]
   );
 
@@ -175,7 +183,7 @@ async function updateBlog(id, data) {
 
   await query(
     `UPDATE blogs
-     SET title = ?, category = ?, author = ?, publish_date = ?, read_time = ?, short_description = ?, description = ?, image_url = ?, image_alt = ?, sequence = ?, status = ?
+     SET title = ?, category = ?, author = ?, publish_date = ?, read_time = ?, short_description = ?, description = ?, image_url = ?, image_alt = ?, sequence = ?, status = ?, meta_title = ?, meta_description = ?
      WHERE id = ?`,
     [
       title !== undefined ? title.trim() : prev.title,
@@ -189,6 +197,8 @@ async function updateBlog(id, data) {
       image_alt !== undefined ? (image_alt ? image_alt.trim() : null) : prev.image_alt,
       sequence,
       status || prev.status,
+      seoValue(data.meta_title, prev.meta_title),
+      seoValue(data.meta_description, prev.meta_description),
       id,
     ]
   );

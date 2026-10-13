@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS login_otps (
 -- 7. SEO Content Table
 CREATE TABLE IF NOT EXISTS seo_content (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  page VARCHAR(100) NOT NULL UNIQUE,
+  page VARCHAR(255) NOT NULL UNIQUE,
   meta_title VARCHAR(255) NULL,
   meta_description TEXT NULL,
   canonical_url VARCHAR(255) NULL,
