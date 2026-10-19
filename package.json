@@ -9,7 +9,10 @@
     "db:migrate": "node src/database/migrate.js",
     "announcements:enable": "node scripts/enableAnnouncements.js",
     "content:import-frontend": "node scripts/importFrontendContent.js",
-    "uploads:migrate-legacy": "node scripts/migrateLegacyUploads.js"
+    "uploads:migrate-legacy": "node scripts/migrateLegacyUploads.js",
+    "media:migrate": "node scripts/adminMedia.js migrate",
+    "media:cleanup": "node scripts/adminMedia.js cleanup",
+    "media:catalog": "node scripts/adminMedia.js catalog"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.1",

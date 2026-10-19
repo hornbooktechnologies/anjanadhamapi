@@ -30,3 +30,8 @@ yarn-error.log*
 package-lock.json
 .vercel
 .env*
+
+# Binary uploads live on the configured persistent volume, never in Git.
+uploads/
+public/uploads/
+**/admin-media/*.webp

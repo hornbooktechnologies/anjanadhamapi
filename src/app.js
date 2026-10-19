@@ -47,6 +47,10 @@ app.use(
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
 
+// Registry-controlled public images cannot bypass publication checks through the legacy static route.
+app.use("/upload", require("./modules/admin-media/routes").publicImages);
+app.use(require('./modules/admin-media/routes').protectLegacyPath);
+
 // Serve uploaded static files
 // Keep existing image URLs while serving portraits from deletable storage.
 app.get(['/uploads/portraits/*', '/uploads/key_members/*'], (req, res, next) => {

@@ -248,7 +248,7 @@ async function isStoredFileReferenced(relativePath) {
     return false;
   }
 
-  const normalizedPath = normalizeUploadPath(relativePath);
+  const normalizedPath = normalizeUploadPath(relativePath) || require("../modules/admin-media/storage").mediaPath(relativePath);
   if (!normalizedPath) {
     return false;
   }

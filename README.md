@@ -1,5 +1,7 @@
 # Vishw Anjanadham Backend API
 
+Admin image uploads now use the MySQL-backed persistent media service. See [admin media setup, API, retention and backups](docs/admin-media.md). Deploy with a persistent `UPLOAD_DIR`, configure `PUBLIC_API_URL`, and run `npm run media:migrate` before using `POST /api/admin/media`.
+
 A production-ready Express.js, Node.js, and MySQL backend for the Vishw Anjanadham admin panel, with token-based JWT authentication and a custom RBAC (Role-Based Access Control) system.
 
 ## Features

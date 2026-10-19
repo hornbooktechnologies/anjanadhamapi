@@ -22,6 +22,15 @@ if (!process.env.VERCEL) {
   setInterval(() => processProfileCleanup().catch(error => {
     console.error('Scheduled profile cleanup will retry:', error.message);
   }), 5 * 60 * 1000).unref();
+  const { cleanup: cleanupAdminMedia } = require('./modules/admin-media/service');
+  let mediaCleanupRunning = false;
+  setInterval(async () => {
+    if (mediaCleanupRunning) return;
+    mediaCleanupRunning = true;
+    try { await cleanupAdminMedia(); }
+    catch (error) { console.error('Admin media cleanup will retry:', error.code || error.message); }
+    finally { mediaCleanupRunning = false; }
+  }, 15 * 60 * 1000).unref();
 }
 
 // Handle unhandledRejection

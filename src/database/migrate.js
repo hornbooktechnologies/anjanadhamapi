@@ -465,6 +465,7 @@ async function migrate() {
 
       // Define default permissions
       const defaultPermissions = [
+        { name: "media.upload", module: "media" },
         ...["view", "create", "update", "delete"].map(action => ({ name: `news.category.${action}`, module: "news" })),
         ...["view", "create", "update", "delete", "publish"].map(action => ({ name: `news.content.${action}`, module: "news" })),
         { name: "dashboard.view", module: "dashboard" },

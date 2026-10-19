@@ -61,6 +61,7 @@ router.get("/role-permissions/me/permissions", authMiddleware, async (req, res, 
 });
 
 // Module routers registration
+router.use("/admin/media", require("../modules/admin-media/routes").admin);
 router.use("/auth", authRoutes);
 router.use("/roles", rolesRoutes);
 router.use("/permissions", permissionsRoutes);
